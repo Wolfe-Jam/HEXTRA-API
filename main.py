@@ -62,6 +62,8 @@ app.add_middleware(
         "http://localhost:3005", 
         "http://localhost:3007",
         "http://localhost:3009",  # Added for current frontend port
+        "https://hextra.io",      # Main production domain
+        "https://www.hextra.io",   # WWW variant
         "https://catalog.hextra.io",
         "https://hextra-color-system-2.vercel.app"
     ],
@@ -137,7 +139,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
-        "app.main:app", 
+        "main:app", 
         host="0.0.0.0", 
         port=int(os.getenv("PORT", 8000)),
         reload=os.getenv("DEBUG", "False").lower() == "true"
