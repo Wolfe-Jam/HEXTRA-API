@@ -188,7 +188,7 @@ The sacred 38 lines are protected intellectual property representing 38 years of
 - **Documentation**: https://api.hextra.io/docs
 - **Issues**: Open GitHub issues for bug reports
 - **Business inquiries**: Contact via HEXTRA website
-
+v1
 ---
 
 **"38 years. 38 lines. Infinite possibilities."**
