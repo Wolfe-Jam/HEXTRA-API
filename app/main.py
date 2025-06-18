@@ -22,7 +22,7 @@ load_dotenv()
 app = FastAPI(
     title="HEXTRA Detection API",
     description="""
-    🎯 The 38-Line Revolution
+    The 38-Line Revolution
     
     38 years of computer vision expertise (1986-2024) distilled into the most efficient 
     garment detection API on the planet. 
@@ -31,10 +31,10 @@ app = FastAPI(
     Each line represents one year of hard-earned expertise.
     
     **Features:**
-    - ⚡ Sub-second processing on any image
-    - 🎯 Mathematical OTSU precision  
-    - 🏆 Industry-leading accuracy
-    - 🚀 Conquered Times Square Cutie (the impossible test case)
+    - Sub-second processing on any image
+    - Mathematical OTSU precision  
+    - Industry-leading accuracy
+    - Conquered Times Square Cutie (the impossible test case)
     
     **The Legend:** One line of code per year of experience.
     """,
@@ -57,9 +57,16 @@ startup_time = time.time()
 # CORS middleware - allow HEXTRA frontend to call this API
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=os.getenv("CORS_ORIGINS", "http://localhost:3000").split(","),
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:3005", 
+        "http://localhost:3007",
+        "http://localhost:3009",  # Added for current frontend port
+        "https://catalog.hextra.io",
+        "https://hextra-color-system-2.vercel.app"
+    ],
     allow_credentials=True,
-    allow_methods=["GET", "POST"],
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 
@@ -70,7 +77,7 @@ app.include_router(api_v1_router, prefix="/api/v1", tags=["Detection"])
 @app.get("/", response_model=dict)
 async def root():
     """
-    🏛️ Welcome to the HEXTRA API Empire
+    Welcome to the HEXTRA API Empire
     """
     return {
         "message": "HEXTRA Detection API - The 38-Line Revolution",
@@ -86,7 +93,7 @@ async def root():
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
     """
-    💊 Health check endpoint for monitoring
+    Health check endpoint for monitoring
     """
     uptime = time.time() - startup_time
     
@@ -101,7 +108,7 @@ async def health_check():
 @app.middleware("http")
 async def add_process_time_header(request: Request, call_next):
     """
-    ⏱️ Add processing time to response headers
+    Add processing time to response headers
     """
     start_time = time.time()
     response = await call_next(request)
@@ -113,7 +120,7 @@ async def add_process_time_header(request: Request, call_next):
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     """
-    🚨 Global exception handler for graceful error responses
+    Global exception handler for graceful error responses
     """
     return JSONResponse(
         status_code=500,
