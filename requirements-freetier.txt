@@ -1,0 +1,9 @@
+# Memory-optimized requirements for testing free tiers
+fastapi==0.104.1
+uvicorn==0.24.0  # Without [standard] to save space
+opencv-python-headless==4.8.1.78
+pillow==10.1.0
+python-multipart==0.0.6
+numpy==1.24.3
+
+# Minimal - no test/dev dependencies
