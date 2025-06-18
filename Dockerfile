@@ -1,3 +1,5 @@
+FROM python:3.11-slim
+# FORCED REBUILD - DELETE THIS LATER
 # Use Python slim image with pre-installed dependencies
 FROM python:3.11-slim
 
