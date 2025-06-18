@@ -1,4 +1,4 @@
-\# Use Python slim image with pre-installed dependencies
+# Use Python slim image with pre-installed dependencies
 FROM python:3.11-slim
 # This dummy line forces a rebuild. Do not remove until issue is resolved.
 
@@ -24,7 +24,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
-# Expose port (Good for docs)
+# Expose port (Good for documentation)
 EXPOSE 8000
 
 # Run the application -- HARDCODING PORT FOR DEBUGGING
