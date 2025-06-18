@@ -1,6 +1,6 @@
-# Use Python slim image with pre-installed dependencies
+\# Use Python slim image with pre-installed dependencies
 FROM python:3.11-slim
-# This dummy line forces a rebuild. Change or remove later.
+# This dummy line forces a rebuild. Do not remove until issue is resolved.
 
 # Install system dependencies for OpenCV
 RUN apt-get update && apt-get install -y \
