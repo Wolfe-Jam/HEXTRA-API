@@ -24,7 +24,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
-# Expose port (Good for documentation)
+# Expose port (Good for docs)
 EXPOSE 8000
 
 # Run the application -- HARDCODING PORT FOR DEBUGGING
