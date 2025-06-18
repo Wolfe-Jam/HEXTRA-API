@@ -1,0 +1,9 @@
+[phases.setup]
+nixPkgs = ["python311", "gcc", "libstdcxx"]
+aptPkgs = ["libgl1-mesa-glx", "libglib2.0-0", "libsm6", "libxext6", "libxrender-dev", "libgomp1"]
+
+[phases.install]
+cmds = ["pip install --upgrade pip", "pip install -r requirements.txt"]
+
+[start]
+cmd = "uvicorn api.index:app --host 0.0.0.0 --port $PORT"
