@@ -1,6 +1,5 @@
 # Use Python slim image with pre-installed dependencies
 FROM python:3.11-slim
-# This dummy line forces a rebuild. Do not remove until issue is resolved.
 
 # Install system dependencies for OpenCV
 RUN apt-get update && apt-get install -y \
@@ -24,8 +23,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
-# Expose port (Good for documentation)
+# Expose port (Good for documentation; Render will use its own PORT env var)
 EXPOSE 8000
 
-# Run the application -- HARDCODING PORT FOR DEBUGGING
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run the application, using the PORT environment variable provided by Render
+# The shell form is reliable for environment variable expansion
+CMD uvicorn main:app --host 0.0.0.0 --port ${PORT}
