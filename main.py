@@ -27,7 +27,9 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:5173",  # Vite dev server
+        "http://localhost:3010",  # Vite dev server (current port)
+        "http://localhost:3009",  # Vite dev server
+        "http://localhost:5173",  # Vite dev server (alternative port)
         "http://localhost:3000",  # Alternative port
         "https://hextra.io",      # Production
         "https://catalog.hextra.io"
@@ -35,6 +37,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 
