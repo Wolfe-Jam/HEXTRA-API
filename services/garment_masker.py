@@ -515,7 +515,7 @@ class GarmentMasker:
     
     def extract_garment_exclude_face_after(self, sacred38_result: np.ndarray, original_image: np.ndarray) -> np.ndarray:
         """
-        Extract garment by excluding face from sacred-38 result (not from original).
+        Extract garment by excluding face from sacred-38 result.
         
         Args:
             sacred38_result: B/W mask from sacred-38
@@ -537,8 +537,8 @@ class GarmentMasker:
         gray_original = cv2.cvtColor(original_image, cv2.COLOR_BGR2GRAY)
         faces = self.face_cascade.detectMultiScale(
             gray_original,
-            scaleFactor=1.1,
-            minNeighbors=5,
+            scaleFactor=1.05,  # More sensitive
+            minNeighbors=3,    # Less strict
             minSize=(30, 30)
         )
         
@@ -547,11 +547,16 @@ class GarmentMasker:
         
         # Black out face areas in the sacred-38 result
         if len(faces) > 0:
-            for (x, y, w, h) in faces:
-                # Generous coverage for face and hair
-                extend_up = int(h * 1.0)
-                extend_down = int(h * 0.5)
-                extend_sides = int(w * 0.5)
+            # Process the largest face
+            if len(faces) > 0:
+                # Get the largest face
+                largest_face = max(faces, key=lambda f: f[2] * f[3])
+                x, y, w, h = largest_face
+                
+                # More aggressive coverage for complete face removal
+                extend_up = int(h * 1.5)    # Lots of hair coverage
+                extend_down = int(h * 0.8)  # Good neck coverage
+                extend_sides = int(w * 0.8) # Wide coverage
                 
                 x1 = max(0, x - extend_sides)
                 y1 = max(0, y - extend_up)
@@ -561,13 +566,13 @@ class GarmentMasker:
                 # Set face region to black in the mask
                 result_mask[y1:y2, x1:x2] = 0
         
-        # Now find the largest white blob
+        # Now find the largest white blob (should be the garment)
         num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(result_mask, connectivity=8)
         
         if num_labels <= 1:
             return result_mask
         
-        # Find largest component (excluding background)
+        # Find largest component (excluding background which is 0)
         sizes = stats[1:, cv2.CC_STAT_AREA]
         if len(sizes) > 0:
             largest_idx = np.argmax(sizes) + 1
@@ -576,13 +581,18 @@ class GarmentMasker:
             final_mask = np.zeros_like(result_mask)
             final_mask[labels == largest_idx] = 255
             
-            # Clean up
-            kernel = np.ones((7, 7), np.uint8)
-            final_mask = cv2.morphologyEx(final_mask, cv2.MORPH_CLOSE, kernel, iterations=2)
-            final_mask = cv2.morphologyEx(final_mask, cv2.MORPH_OPEN, kernel, iterations=1)
+            # Clean up with more aggressive morphology
+            kernel = np.ones((15, 15), np.uint8)
+            final_mask = cv2.morphologyEx(final_mask, cv2.MORPH_CLOSE, kernel, iterations=3)
+            final_mask = cv2.morphologyEx(final_mask, cv2.MORPH_OPEN, kernel, iterations=2)
             
-            # Smooth edges
-            final_mask = cv2.GaussianBlur(final_mask, (5, 5), 0)
+            # Fill any internal holes
+            contours, _ = cv2.findContours(final_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            if contours:
+                cv2.drawContours(final_mask, contours, -1, 255, cv2.FILLED)
+            
+            # Final smoothing
+            final_mask = cv2.GaussianBlur(final_mask, (9, 9), 0)
             _, final_mask = cv2.threshold(final_mask, 127, 255, cv2.THRESH_BINARY)
             
             return final_mask
