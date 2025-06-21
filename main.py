@@ -8,7 +8,6 @@ import base64
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from typing import Optional
 import cv2
 import numpy as np
@@ -38,8 +37,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount static files
-app.mount("/static", StaticFiles(directory="static"), name="static")
+
 
 # Initialize garment masker
 masker = GarmentMasker()
