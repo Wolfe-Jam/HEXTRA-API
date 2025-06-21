@@ -9,8 +9,8 @@ from typing import Tuple, Optional
 class FocusDetector:
     def __init__(self):
         """Initialize the focus detector with default parameters"""
-        self.laplacian_threshold = 100.0  # Threshold for focus detection
-        self.gradient_threshold = 50.0    # Threshold for edge sharpness
+        self.laplacian_threshold = 50.0   # Reduced from 100.0 - more inclusive
+        self.gradient_threshold = 25.0    # Reduced from 50.0 - more inclusive
         self.kernel_size = 5              # Kernel size for operations
         
     def calculate_laplacian_variance(self, image: np.ndarray) -> np.ndarray:

@@ -639,8 +639,17 @@ class GarmentMasker:
         _, sacred_binary = cv2.threshold(sacred_gray, 127, 255, cv2.THRESH_BINARY)
         
         # Step 3: Combine focus mask with Sacred-38 result
-        # Only keep Sacred-38 white pixels that are also in focused regions
-        combined_mask = cv2.bitwise_and(sacred_binary, focus_mask)
+        # CHANGED: Use focus as enhancement rather than hard filter
+        # If focus detection finds focused areas, enhance those in Sacred-38
+        # But don't completely remove areas that focus detection missed
+        enhanced_sacred = sacred_binary.copy()
+        
+        # Enhance focused areas in the Sacred-38 result
+        focus_enhanced_areas = cv2.bitwise_and(sacred_binary, focus_mask)
+        enhanced_sacred = cv2.bitwise_or(enhanced_sacred, focus_enhanced_areas)
+        
+        # Use enhanced result instead of purely restrictive AND
+        combined_mask = enhanced_sacred
         
         # Step 4: Face detection and exclusion on original image
         gray_original = cv2.cvtColor(original_image, cv2.COLOR_BGR2GRAY)
