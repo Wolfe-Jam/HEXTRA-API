@@ -143,7 +143,11 @@ async def process_garment_full_pipeline(
         sacred38_result = apply_sacred38(original_img)
         
         # Step 2: Extract garment mask from sacred-38 result
-        garment_mask = masker.extract_garment(sacred38_result)
+        # Pass BOTH the original image (for face detection) and sacred-38 result
+        garment_mask = masker.extract_garment_with_original(
+            sacred38_result, 
+            original_img
+        )
         
         if garment_mask is None:
             raise HTTPException(

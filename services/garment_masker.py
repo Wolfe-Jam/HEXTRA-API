@@ -208,3 +208,41 @@ class GarmentMasker:
         # This method allows fine-tuning of the extraction process
         # Implementation would use the params to adjust the processing
         return self.extract_garment(image)
+    def extract_garment_with_original(self, processed_image: np.ndarray, original_image: np.ndarray) -> np.ndarray:
+        """
+        Extract garment mask using both processed and original images.
+        
+        Args:
+            processed_image: Image that has been through sacred-38 processing (B/W)
+            original_image: Original color image for face detection
+            
+        Returns:
+            Binary mask with white garment on black background
+        """
+        # Get image dimensions
+        height, width = processed_image.shape[:2]
+        
+        # Convert processed image to grayscale if needed
+        if len(processed_image.shape) == 3:
+            processed_gray = cv2.cvtColor(processed_image, cv2.COLOR_BGR2GRAY)
+        else:
+            processed_gray = processed_image.copy()
+        
+        # Step 1: Create head exclusion mask using ORIGINAL image
+        original_gray = cv2.cvtColor(original_image, cv2.COLOR_BGR2GRAY)
+        head_mask = self._create_head_exclusion_mask(original_gray)
+        
+        # Step 2: The sacred-38 result is already binary, just ensure it's clean
+        _, binary = cv2.threshold(processed_gray, 127, 255, cv2.THRESH_BINARY)
+        
+        # Step 3: Remove head area from sacred-38 result
+        garment_candidates = cv2.bitwise_and(binary, binary, mask=cv2.bitwise_not(head_mask))
+        
+        # Step 4: Find largest contour (the garment)
+        garment_mask = self._find_largest_garment(garment_candidates)
+        
+        # Step 5: Clean up the mask
+        if garment_mask is not None:
+            garment_mask = self._clean_mask(garment_mask)
+        
+        return garment_mask
