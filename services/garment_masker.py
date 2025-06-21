@@ -389,23 +389,42 @@ class GarmentMasker:
             sizes = stats[1:, cv2.CC_STAT_AREA]
             
             if len(sizes) > 0:
-                # Get the largest component
-                largest_idx = np.argmax(sizes) + 1  # +1 because we excluded background
+                # Sort components by size in descending order
+                sorted_indices = np.argsort(sizes)[::-1]
                 
-                # Create mask for only the largest component
-                final_mask = np.zeros_like(garment_mask)
-                final_mask[labels == largest_idx] = 255
+                # Try to find the garment (usually the second largest after head)
+                for idx in sorted_indices:
+                    component_idx = idx + 1  # +1 because we excluded background
+                    
+                    # Get the bounding box of this component
+                    x, y, w, h = stats[component_idx, cv2.CC_STAT_LEFT:cv2.CC_STAT_TOP + 4]
+                    
+                    # Check if this component is likely a garment (lower in image, wider)
+                    component_center_y = y + h // 2
+                    
+                    # If component is in lower 2/3 of image and reasonably wide, it's likely the garment
+                    if component_center_y > height * 0.4 and w > width * 0.3:
+                        # Create mask for this component
+                        final_mask = np.zeros_like(garment_mask)
+                        final_mask[labels == component_idx] = 255
+                        
+                        # Clean up the final mask
+                        kernel = np.ones((7, 7), np.uint8)
+                        final_mask = cv2.morphologyEx(final_mask, cv2.MORPH_CLOSE, kernel, iterations=2)
+                        final_mask = cv2.morphologyEx(final_mask, cv2.MORPH_OPEN, kernel, iterations=1)
+                        
+                        # Smooth edges
+                        final_mask = cv2.GaussianBlur(final_mask, (5, 5), 0)
+                        _, final_mask = cv2.threshold(final_mask, 127, 255, cv2.THRESH_BINARY)
+                        
+                        return final_mask
                 
-                # Clean up the final mask
-                kernel = np.ones((7, 7), np.uint8)
-                final_mask = cv2.morphologyEx(final_mask, cv2.MORPH_CLOSE, kernel, iterations=2)
-                final_mask = cv2.morphologyEx(final_mask, cv2.MORPH_OPEN, kernel, iterations=1)
-                
-                # Smooth edges
-                final_mask = cv2.GaussianBlur(final_mask, (5, 5), 0)
-                _, final_mask = cv2.threshold(final_mask, 127, 255, cv2.THRESH_BINARY)
-                
-                return final_mask
+                # If no garment-like component found, return the largest non-head component
+                if len(sizes) > 1:
+                    second_largest_idx = sorted_indices[1] + 1
+                    final_mask = np.zeros_like(garment_mask)
+                    final_mask[labels == second_largest_idx] = 255
+                    return self._clean_mask(final_mask)
         
         # If no good component found, return cleaned garment mask
         return garment_mask
