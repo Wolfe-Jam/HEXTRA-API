@@ -143,8 +143,8 @@ async def process_garment_full_pipeline(
         sacred38_result = apply_sacred38(original_img)
         
         # Step 2: Extract garment mask from sacred-38 result
-        # Use color-based method for better results
-        garment_mask = masker.extract_garment_with_color_hints(
+        # Use background-first approach for cleaner results
+        garment_mask = masker.extract_garment_background_first(
             sacred38_result, 
             original_img
         )

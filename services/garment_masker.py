@@ -321,3 +321,91 @@ class GarmentMasker:
         garment_mask = self._clean_mask(garment_mask)
         
         return garment_mask
+    
+    def extract_garment_background_first(self, sacred38_result: np.ndarray, original_image: np.ndarray) -> np.ndarray:
+        """
+        Extract garment by first ensuring background is removed, then excluding face.
+        
+        Args:
+            sacred38_result: Result from sacred-38 (background should be black)
+            original_image: Original color image for face detection
+            
+        Returns:
+            Clean garment mask
+        """
+        height, width = original_image.shape[:2]
+        
+        # Convert sacred38 result to grayscale
+        if len(sacred38_result.shape) == 3:
+            sacred_gray = cv2.cvtColor(sacred38_result, cv2.COLOR_BGR2GRAY)
+        else:
+            sacred_gray = sacred38_result.copy()
+        
+        # Ensure we have a clean binary mask
+        _, binary_mask = cv2.threshold(sacred_gray, 127, 255, cv2.THRESH_BINARY)
+        
+        # Step 1: Detect face in original image
+        gray_original = cv2.cvtColor(original_image, cv2.COLOR_BGR2GRAY)
+        faces = self.face_cascade.detectMultiScale(
+            gray_original, 
+            scaleFactor=1.03,  # Very sensitive
+            minNeighbors=3,
+            minSize=(20, 20)
+        )
+        
+        # Create face exclusion mask
+        face_mask = np.zeros_like(binary_mask)
+        
+        if len(faces) > 0:
+            # Take the most prominent face (usually the largest)
+            largest_face = max(faces, key=lambda f: f[2] * f[3])
+            x, y, w, h = largest_face
+            
+            # Conservative exclusion - just face and hair
+            extend_up = int(h * 0.6)    # Hair
+            extend_down = int(h * 0.2)  # Small neck area
+            extend_sides = int(w * 0.3) # Sides of hair
+            
+            x1 = max(0, x - extend_sides)
+            y1 = max(0, y - extend_up)
+            x2 = min(width, x + w + extend_sides)
+            y2 = min(height, y + h + extend_down)
+            
+            cv2.rectangle(face_mask, (x1, y1), (x2, y2), 255, cv2.FILLED)
+            
+            # Smooth the face mask
+            kernel = np.ones((11, 11), np.uint8)
+            face_mask = cv2.morphologyEx(face_mask, cv2.MORPH_CLOSE, kernel)
+        
+        # Step 2: Remove face area from sacred38 result
+        garment_mask = cv2.bitwise_and(binary_mask, binary_mask, mask=cv2.bitwise_not(face_mask))
+        
+        # Step 3: Find connected components
+        num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(garment_mask, connectivity=8)
+        
+        # Step 4: Find the largest component (excluding background)
+        if num_labels > 1:
+            # Get component sizes (excluding background which is label 0)
+            sizes = stats[1:, cv2.CC_STAT_AREA]
+            
+            if len(sizes) > 0:
+                # Get the largest component
+                largest_idx = np.argmax(sizes) + 1  # +1 because we excluded background
+                
+                # Create mask for only the largest component
+                final_mask = np.zeros_like(garment_mask)
+                final_mask[labels == largest_idx] = 255
+                
+                # Clean up the final mask
+                kernel = np.ones((7, 7), np.uint8)
+                final_mask = cv2.morphologyEx(final_mask, cv2.MORPH_CLOSE, kernel, iterations=2)
+                final_mask = cv2.morphologyEx(final_mask, cv2.MORPH_OPEN, kernel, iterations=1)
+                
+                # Smooth edges
+                final_mask = cv2.GaussianBlur(final_mask, (5, 5), 0)
+                _, final_mask = cv2.threshold(final_mask, 127, 255, cv2.THRESH_BINARY)
+                
+                return final_mask
+        
+        # If no good component found, return cleaned garment mask
+        return garment_mask
