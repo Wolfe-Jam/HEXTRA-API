@@ -27,17 +27,20 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:3010",  # Vite dev server (current port)
-        "http://localhost:3009",  # Vite dev server
-        "http://localhost:5173",  # Vite dev server (alternative port)
-        "http://localhost:3000",  # Alternative port
+        "http://localhost:3009",  # Main development server
+        "http://localhost:3010",  # Alternative dev server
+        "http://localhost:5173",  # Vite default dev server
+        "http://localhost:3000",  # Common React dev server
+        "http://localhost:8000",  # Common API dev server
         "https://hextra.io",      # Production
-        "https://catalog.hextra.io"
+        "https://catalog.hextra.io",  # Production catalog
+        "https://hextra-api.onrender.com"  # Render deployment
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
+    max_age=600,  # Cache preflight requests for 10 minutes
 )
 
 
