@@ -139,15 +139,14 @@ async def process_garment_full_pipeline(
         if original_img is None:
             raise HTTPException(status_code=400, detail="Could not decode image")
         
-        # Step 1: Apply sacred-38 processing
-        sacred38_result = apply_sacred38(original_img)
+        # Step 1: Detect face in original image FIRST
+        face_excluded_img = masker.exclude_face_from_image(original_img)
         
-        # Step 2: Extract garment mask from sacred-38 result
-        # Use background-first approach for cleaner results
-        garment_mask = masker.extract_garment_background_first(
-            sacred38_result, 
-            original_img
-        )
+        # Step 2: Apply sacred-38 processing to face-excluded image
+        sacred38_result = apply_sacred38(face_excluded_img)
+        
+        # Step 3: Extract garment mask (should be the largest white blob now)
+        garment_mask = masker.extract_largest_white_blob(sacred38_result)
         
         if garment_mask is None:
             raise HTTPException(

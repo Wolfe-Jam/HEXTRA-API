@@ -428,3 +428,87 @@ class GarmentMasker:
         
         # If no good component found, return cleaned garment mask
         return garment_mask
+    
+    def exclude_face_from_image(self, image: np.ndarray) -> np.ndarray:
+        """
+        Create a copy of the image with face/hair area blacked out.
+        
+        Args:
+            image: Original color image
+            
+        Returns:
+            Image with face/hair area set to black
+        """
+        result = image.copy()
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        
+        # Detect faces
+        faces = self.face_cascade.detectMultiScale(
+            gray,
+            scaleFactor=1.05,
+            minNeighbors=4,
+            minSize=(30, 30)
+        )
+        
+        if len(faces) > 0:
+            # Process each detected face
+            for (x, y, w, h) in faces:
+                # Generous coverage for face, hair, and neck
+                extend_up = int(h * 1.0)     # Full height up for hair
+                extend_down = int(h * 0.8)   # Good neck coverage
+                extend_sides = int(w * 0.6)  # Hair on sides
+                
+                x1 = max(0, x - extend_sides)
+                y1 = max(0, y - extend_up)
+                x2 = min(image.shape[1], x + w + extend_sides)
+                y2 = min(image.shape[0], y + h + extend_down)
+                
+                # Set this region to black
+                result[y1:y2, x1:x2] = 0
+        
+        return result
+    
+    def extract_largest_white_blob(self, binary_image: np.ndarray) -> np.ndarray:
+        """
+        Extract the largest white blob from a binary image.
+        Simple and effective for post-sacred38 processing.
+        
+        Args:
+            binary_image: Binary image (black and white)
+            
+        Returns:
+            Mask containing only the largest white blob
+        """
+        # Convert to grayscale if needed
+        if len(binary_image.shape) == 3:
+            gray = cv2.cvtColor(binary_image, cv2.COLOR_BGR2GRAY)
+        else:
+            gray = binary_image.copy()
+        
+        # Ensure binary
+        _, binary = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY)
+        
+        # Find connected components
+        num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(binary, connectivity=8)
+        
+        if num_labels <= 1:
+            return binary  # No components found or only background
+        
+        # Find the largest component (excluding background which is label 0)
+        sizes = stats[1:, cv2.CC_STAT_AREA]
+        largest_idx = np.argmax(sizes) + 1
+        
+        # Create mask for only the largest component
+        result = np.zeros_like(binary)
+        result[labels == largest_idx] = 255
+        
+        # Clean up
+        kernel = np.ones((7, 7), np.uint8)
+        result = cv2.morphologyEx(result, cv2.MORPH_CLOSE, kernel, iterations=2)
+        result = cv2.morphologyEx(result, cv2.MORPH_OPEN, kernel, iterations=1)
+        
+        # Smooth edges
+        result = cv2.GaussianBlur(result, (5, 5), 0)
+        _, result = cv2.threshold(result, 127, 255, cv2.THRESH_BINARY)
+        
+        return result
