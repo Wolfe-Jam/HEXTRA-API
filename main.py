@@ -30,6 +30,7 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3009",  # Main development server
         "http://localhost:3010",  # Alternative dev server
+        "http://localhost:3012",  # New dev server port
         "http://localhost:5173",  # Vite default dev server
         "http://localhost:3000",  # Common React dev server
         "http://localhost:8000",  # Common API dev server
