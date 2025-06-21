@@ -116,10 +116,10 @@ class GarmentMasker:
             x, y, w, h = faces[0]
             
             # Extend the face region to cover hair and neck
-            # These are tunable parameters based on typical portraits
-            extend_up = int(h * 0.7)    # Hair above face
-            extend_down = int(h * 0.8)   # Neck below face
-            extend_sides = int(w * 0.4)  # Hair on sides
+            # Increased coverage for better exclusion
+            extend_up = int(h * 1.2)     # More coverage for hair above
+            extend_down = int(h * 1.0)   # More coverage for neck
+            extend_sides = int(w * 0.8)  # More coverage for hair on sides
             
             # Calculate extended region
             x1 = max(0, x - extend_sides)
@@ -131,9 +131,9 @@ class GarmentMasker:
             cv2.rectangle(exclusion_mask, (x1, y1), (x2, y2), 255, cv2.FILLED)
             
             # Apply morphological operations to smooth the exclusion area
-            kernel = np.ones((15, 15), np.uint8)
-            exclusion_mask = cv2.morphologyEx(exclusion_mask, cv2.MORPH_DILATE, kernel, iterations=1)
-            exclusion_mask = cv2.morphologyEx(exclusion_mask, cv2.MORPH_CLOSE, kernel, iterations=1)
+            kernel = np.ones((25, 25), np.uint8)  # Larger kernel for better coverage
+            exclusion_mask = cv2.morphologyEx(exclusion_mask, cv2.MORPH_DILATE, kernel, iterations=2)
+            exclusion_mask = cv2.morphologyEx(exclusion_mask, cv2.MORPH_CLOSE, kernel, iterations=2)
         
         return exclusion_mask
     
@@ -154,7 +154,7 @@ class GarmentMasker:
         # Find the largest contour by area
         largest_contour = None
         max_area = 0
-        min_area_threshold = width * height * 0.01  # At least 1% of image
+        min_area_threshold = width * height * 0.05  # At least 5% of image for garment
         
         for contour in contours:
             area = cv2.contourArea(contour)
@@ -174,16 +174,20 @@ class GarmentMasker:
     def _clean_mask(self, mask: np.ndarray) -> np.ndarray:
         """Clean up the mask with morphological operations"""
         # Close gaps in the garment
-        kernel_close = np.ones((15, 15), np.uint8)
-        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel_close, iterations=2)
+        kernel_close = np.ones((25, 25), np.uint8)  # Larger for better gap filling
+        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel_close, iterations=3)
         
         # Remove small noise
-        kernel_open = np.ones((5, 5), np.uint8)
-        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel_open, iterations=1)
+        kernel_open = np.ones((10, 10), np.uint8)  # Larger for better noise removal
+        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel_open, iterations=2)
         
-        # Final smoothing
-        kernel_smooth = np.ones((7, 7), np.uint8)
-        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel_smooth, iterations=1)
+        # Final smoothing with larger kernel
+        kernel_smooth = np.ones((15, 15), np.uint8)
+        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel_smooth, iterations=2)
+        
+        # Apply Gaussian blur for smoother edges
+        mask = cv2.GaussianBlur(mask, (5, 5), 0)
+        _, mask = cv2.threshold(mask, 127, 255, cv2.THRESH_BINARY)
         
         return mask
     

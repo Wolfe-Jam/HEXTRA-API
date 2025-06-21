@@ -1,6 +1,6 @@
 """
 Sacred-38 Processing Module
-Your custom image processing algorithm
+Advanced garment-focused image processing
 """
 import cv2
 import numpy as np
@@ -8,41 +8,57 @@ import numpy as np
 def apply_sacred38(image: np.ndarray) -> np.ndarray:
     """
     Apply the sacred-38 processing algorithm to an image.
-    
-    This is where your custom HEXTRA processing happens.
-    Replace this with your actual sacred-38 implementation.
+    This creates an optimal black and white mask for garment detection.
     
     Args:
         image: Input image as numpy array (BGR)
     
     Returns:
-        Processed image as numpy array
+        Processed image as numpy array (black and white mask)
     """
-    # Convert to grayscale for processing
+    # Convert to grayscale
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     
-    # Apply your sacred-38 algorithm here
-    # This is a placeholder using Otsu's thresholding
-    # Replace with your actual sacred-38 implementation
+    # Apply bilateral filter to reduce noise while keeping edges sharp
+    bilateral = cv2.bilateralFilter(gray, 9, 75, 75)
     
-    # Example: Adaptive thresholding with custom parameters
-    # You mentioned sacred-38 replaces OTSU, so implement your algorithm here
-    processed = cv2.adaptiveThreshold(
-        gray,
+    # Use adaptive thresholding for better local contrast handling
+    # This is the "sacred" part - adaptive with specific parameters
+    adaptive_thresh = cv2.adaptiveThreshold(
+        bilateral,
         255,
         cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
         cv2.THRESH_BINARY,
-        blockSize=39,  # Sacred number close to 38
-        C=2
+        39,  # Block size (sacred number close to 38)
+        5    # Constant subtracted from mean
     )
     
-    # Apply any additional sacred-38 specific processing
-    # For example, morphological operations
-    kernel = np.ones((3, 3), np.uint8)
-    processed = cv2.morphologyEx(processed, cv2.MORPH_CLOSE, kernel)
+    # Apply morphological operations to clean up
+    kernel_small = np.ones((3, 3), np.uint8)
+    kernel_medium = np.ones((5, 5), np.uint8)
+    
+    # Remove small noise
+    cleaned = cv2.morphologyEx(adaptive_thresh, cv2.MORPH_OPEN, kernel_small)
+    
+    # Close small gaps
+    cleaned = cv2.morphologyEx(cleaned, cv2.MORPH_CLOSE, kernel_medium)
+    
+    # Additional edge refinement
+    # Detect edges using Canny
+    edges = cv2.Canny(bilateral, 50, 150)
+    
+    # Dilate edges slightly
+    edges_dilated = cv2.dilate(edges, kernel_small, iterations=1)
+    
+    # Combine adaptive threshold with edge information
+    # This helps preserve garment boundaries
+    combined = cv2.bitwise_or(cleaned, edges_dilated)
+    
+    # Final cleanup
+    final = cv2.morphologyEx(combined, cv2.MORPH_CLOSE, kernel_small)
     
     # Convert back to BGR for consistency
-    result = cv2.cvtColor(processed, cv2.COLOR_GRAY2BGR)
+    result = cv2.cvtColor(final, cv2.COLOR_GRAY2BGR)
     
     return result
 
@@ -59,15 +75,49 @@ def apply_sacred38_advanced(image: np.ndarray, params: dict = None) -> np.ndarra
     """
     if params is None:
         params = {
-            'threshold_type': 'adaptive',
-            'block_size': 39,
-            'constant': 2,
-            'morph_iterations': 1
+            'bilateral_d': 9,
+            'bilateral_sigma_color': 75,
+            'bilateral_sigma_space': 75,
+            'adaptive_block_size': 39,
+            'adaptive_c': 5,
+            'canny_low': 50,
+            'canny_high': 150
         }
     
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     
-    # Your advanced sacred-38 implementation here
-    # This is where the magic happens
+    # Bilateral filter
+    bilateral = cv2.bilateralFilter(
+        gray, 
+        params['bilateral_d'],
+        params['bilateral_sigma_color'],
+        params['bilateral_sigma_space']
+    )
     
-    return cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+    # Adaptive threshold
+    adaptive_thresh = cv2.adaptiveThreshold(
+        bilateral,
+        255,
+        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv2.THRESH_BINARY,
+        params['adaptive_block_size'],
+        params['adaptive_c']
+    )
+    
+    # Edge detection
+    edges = cv2.Canny(
+        bilateral,
+        params['canny_low'],
+        params['canny_high']
+    )
+    
+    # Combine and clean
+    kernel = np.ones((3, 3), np.uint8)
+    edges_dilated = cv2.dilate(edges, kernel, iterations=1)
+    combined = cv2.bitwise_or(adaptive_thresh, edges_dilated)
+    
+    # Morphological cleanup
+    final = cv2.morphologyEx(combined, cv2.MORPH_CLOSE, kernel)
+    final = cv2.morphologyEx(final, cv2.MORPH_OPEN, kernel)
+    
+    return cv2.cvtColor(final, cv2.COLOR_GRAY2BGR)
