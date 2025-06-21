@@ -5,6 +5,7 @@ Intelligently isolates garments from processed images
 import cv2
 import numpy as np
 import os
+from .focus_detector import FocusDetector
 
 class GarmentMasker:
     def __init__(self):
@@ -208,6 +209,7 @@ class GarmentMasker:
         # This method allows fine-tuning of the extraction process
         # Implementation would use the params to adjust the processing
         return self.extract_garment(image)
+    
     def extract_garment_with_original(self, processed_image: np.ndarray, original_image: np.ndarray) -> np.ndarray:
         """
         Extract garment mask using both processed and original images.
@@ -598,3 +600,110 @@ class GarmentMasker:
             return final_mask
         
         return result_mask
+
+    def extract_garment_with_focus(self, sacred38_result: np.ndarray, original_image: np.ndarray, focus_detector: FocusDetector = None) -> dict:
+        """
+        Enhanced garment extraction using focus detection for foreground/background separation.
+        
+        This method combines:
+        1. Focus detection to separate focused (garment) from blurry (background) regions
+        2. Sacred-38 binary segmentation
+        3. Face detection and exclusion
+        4. Largest blob extraction and cleanup
+        
+        Args:
+            sacred38_result: B/W mask from sacred-38 processing
+            original_image: Original color image for focus detection and face detection
+            focus_detector: Optional FocusDetector instance (creates new if None)
+            
+        Returns:
+            Dictionary containing:
+            - garment_mask: Final clean garment mask
+            - focus_mask: Focus detection mask (for debugging)
+            - intermediate_result: Sacred-38 + focus combined mask (for debugging)
+        """
+        # Initialize focus detector if not provided
+        if focus_detector is None:
+            focus_detector = FocusDetector()
+        
+        # Step 1: Generate focus mask from original image
+        focus_result = focus_detector.detect_foreground_focus(original_image, return_intermediate=True)
+        focus_mask = focus_result["focus_mask"]
+        
+        # Step 2: Convert sacred38 result to binary
+        if len(sacred38_result.shape) == 3:
+            sacred_gray = cv2.cvtColor(sacred38_result, cv2.COLOR_BGR2GRAY)
+        else:
+            sacred_gray = sacred38_result.copy()
+        
+        _, sacred_binary = cv2.threshold(sacred_gray, 127, 255, cv2.THRESH_BINARY)
+        
+        # Step 3: Combine focus mask with Sacred-38 result
+        # Only keep Sacred-38 white pixels that are also in focused regions
+        combined_mask = cv2.bitwise_and(sacred_binary, focus_mask)
+        
+        # Step 4: Face detection and exclusion on original image
+        gray_original = cv2.cvtColor(original_image, cv2.COLOR_BGR2GRAY)
+        
+        if self.face_cascade is not None:
+            faces = self.face_cascade.detectMultiScale(
+                gray_original,
+                scaleFactor=1.05,
+                minNeighbors=3,
+                minSize=(30, 30)
+            )
+            
+            # Remove face areas from combined mask
+            if len(faces) > 0:
+                # Process the largest face
+                largest_face = max(faces, key=lambda f: f[2] * f[3])
+                x, y, w, h = largest_face
+                
+                # Extended coverage for complete face removal
+                extend_up = int(h * 1.5)    # Hair coverage
+                extend_down = int(h * 0.8)  # Neck coverage
+                extend_sides = int(w * 0.8) # Side coverage
+                
+                x1 = max(0, x - extend_sides)
+                y1 = max(0, y - extend_up)
+                x2 = min(combined_mask.shape[1], x + w + extend_sides)
+                y2 = min(combined_mask.shape[0], y + h + extend_down)
+                
+                # Set face region to black
+                combined_mask[y1:y2, x1:x2] = 0
+        
+        # Step 5: Find largest white blob (garment)
+        num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(combined_mask, connectivity=8)
+        
+        final_mask = np.zeros_like(combined_mask)
+        
+        if num_labels > 1:
+            # Find largest component (excluding background which is 0)
+            sizes = stats[1:, cv2.CC_STAT_AREA]
+            if len(sizes) > 0:
+                largest_idx = np.argmax(sizes) + 1
+                final_mask[labels == largest_idx] = 255
+        
+        # Step 6: Clean up the final mask
+        if np.any(final_mask):
+            # Aggressive morphological cleanup
+            kernel = np.ones((15, 15), np.uint8)
+            final_mask = cv2.morphologyEx(final_mask, cv2.MORPH_CLOSE, kernel, iterations=3)
+            final_mask = cv2.morphologyEx(final_mask, cv2.MORPH_OPEN, kernel, iterations=2)
+            
+            # Fill holes
+            contours, _ = cv2.findContours(final_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            if contours:
+                cv2.drawContours(final_mask, contours, -1, 255, cv2.FILLED)
+            
+            # Final smoothing
+            final_mask = cv2.GaussianBlur(final_mask, (9, 9), 0)
+            _, final_mask = cv2.threshold(final_mask, 127, 255, cv2.THRESH_BINARY)
+        
+        # Return comprehensive result
+        return {
+            "garment_mask": final_mask,
+            "focus_mask": focus_mask,
+            "intermediate_result": combined_mask,
+            "focus_debug": focus_result if "laplacian_map" in focus_result else None
+        }

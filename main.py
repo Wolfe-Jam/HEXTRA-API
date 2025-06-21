@@ -15,6 +15,7 @@ import numpy as np
 # Import our custom services
 from services.sacred38 import apply_sacred38
 from services.garment_masker import GarmentMasker
+from services.focus_detector import FocusDetector
 
 # --- FastAPI App Initialization ---
 app = FastAPI(
@@ -47,6 +48,7 @@ app.add_middleware(
 
 # Initialize garment masker
 masker = GarmentMasker()
+focus_detector = FocusDetector()
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
@@ -94,6 +96,7 @@ async def root():
             <h2>Available Endpoints:</h2>
             <ul>
                 <li><code>POST /process-garment/</code> - Full pipeline (sacred-38 + masking)</li>
+                <li><code>POST /process-garment-v2/</code> - Enhanced pipeline with focus detection</li>
                 <li><code>POST /sacred38/</code> - Sacred-38 processing only</li>
                 <li><code>POST /mask-garment/</code> - Garment masking only</li>
                 <li><code>GET /docs</code> - Interactive API documentation</li>
@@ -172,6 +175,108 @@ async def process_garment_full_pipeline(
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Processing error: {str(e)}")
+
+@app.post("/process-garment-v2/")
+async def process_garment_enhanced_pipeline(
+    file: UploadFile = File(...),
+    return_debug: bool = False
+):
+    """
+    Enhanced pipeline: Original image → Focus detection → Sacred-38 → Garment mask
+    
+    This endpoint uses focus/blur detection to improve garment segmentation,
+    especially for challenging cases like white garments on bright backgrounds.
+    
+    Args:
+        file: Image file to process
+        return_debug: If True, returns debug information including focus masks
+    
+    Returns:
+        JSON with base64 encoded images and optional debug data
+    """
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="File must be an image")
+    
+    try:
+        # Read uploaded image
+        contents = await file.read()
+        nparr = np.frombuffer(contents, np.uint8)
+        original_img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        
+        if original_img is None:
+            raise HTTPException(status_code=400, detail="Could not decode image")
+        
+        # Step 1: Apply sacred-38 processing to original image
+        sacred38_result = apply_sacred38(original_img)
+        
+        # Step 2: Enhanced garment extraction with focus detection
+        focus_result = masker.extract_garment_with_focus(
+            sacred38_result, 
+            original_img,
+            focus_detector
+        )
+        
+        garment_mask = focus_result["garment_mask"]
+        
+        if garment_mask is None or not np.any(garment_mask):
+            raise HTTPException(
+                status_code=500, 
+                detail="Could not detect garment. Try adjusting the image or lighting."
+            )
+        
+        # Encode results
+        response = {}
+        
+        # Always include final mask
+        _, mask_buffer = cv2.imencode(".png", garment_mask)
+        mask_base64 = base64.b64encode(mask_buffer).decode('utf-8')
+        response["garment_mask"] = f"data:image/png;base64,{mask_base64}"
+        
+        # Include debug information if requested
+        if return_debug:
+            # Focus mask
+            focus_mask = focus_result["focus_mask"]
+            _, focus_buffer = cv2.imencode(".png", focus_mask)
+            focus_base64 = base64.b64encode(focus_buffer).decode('utf-8')
+            response["focus_mask"] = f"data:image/png;base64,{focus_base64}"
+            
+            # Sacred-38 result
+            _, sacred_buffer = cv2.imencode(".png", sacred38_result)
+            sacred_base64 = base64.b64encode(sacred_buffer).decode('utf-8')
+            response["sacred38_result"] = f"data:image/png;base64,{sacred_base64}"
+            
+            # Intermediate combined mask
+            intermediate = focus_result["intermediate_result"]
+            _, intermediate_buffer = cv2.imencode(".png", intermediate)
+            intermediate_base64 = base64.b64encode(intermediate_buffer).decode('utf-8')
+            response["intermediate_mask"] = f"data:image/png;base64,{intermediate_base64}"
+            
+            # Focus debug info if available
+            if focus_result["focus_debug"]:
+                debug_info = focus_result["focus_debug"]
+                
+                # Laplacian map
+                if "laplacian_map" in debug_info:
+                    laplacian_map = debug_info["laplacian_map"]
+                    _, lap_buffer = cv2.imencode(".png", laplacian_map)
+                    lap_base64 = base64.b64encode(lap_buffer).decode('utf-8')
+                    response["laplacian_map"] = f"data:image/png;base64,{lap_base64}"
+                
+                # Gradient map
+                if "gradient_map" in debug_info:
+                    gradient_map = debug_info["gradient_map"]
+                    _, grad_buffer = cv2.imencode(".png", gradient_map)
+                    grad_base64 = base64.b64encode(grad_buffer).decode('utf-8')
+                    response["gradient_map"] = f"data:image/png;base64,{grad_base64}"
+        
+        # Add metadata about the processing method
+        response["method"] = "focus_enhanced"
+        response["version"] = "v2"
+        
+        return JSONResponse(content=response)
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Enhanced processing error: {str(e)}")
 
 @app.post("/sacred38/")
 async def process_sacred38_only(file: UploadFile = File(...)):
