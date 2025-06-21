@@ -103,12 +103,12 @@ class GarmentMasker:
             print("Warning: Face cascade not loaded, skipping face detection")
             return exclusion_mask
         
-        # Detect faces
+        # Detect faces with more sensitive parameters
         faces = self.face_cascade.detectMultiScale(
             gray_image,
-            scaleFactor=1.1,
-            minNeighbors=5,
-            minSize=(30, 30)
+            scaleFactor=1.05,  # More sensitive (was 1.1)
+            minNeighbors=3,    # Less strict (was 5)
+            minSize=(20, 20)   # Smaller minimum (was 30, 30)
         )
         
         if len(faces) > 0:
@@ -244,5 +244,80 @@ class GarmentMasker:
         # Step 5: Clean up the mask
         if garment_mask is not None:
             garment_mask = self._clean_mask(garment_mask)
+        
+        return garment_mask
+    
+    def extract_garment_with_color_hints(self, sacred38_result: np.ndarray, original_image: np.ndarray) -> np.ndarray:
+        """
+        Extract garment using color information from original image.
+        
+        Args:
+            sacred38_result: Black and white mask from sacred-38
+            original_image: Original color image
+            
+        Returns:
+            Clean garment mask
+        """
+        height, width = original_image.shape[:2]
+        
+        # Convert images
+        if len(sacred38_result.shape) == 3:
+            sacred_gray = cv2.cvtColor(sacred38_result, cv2.COLOR_BGR2GRAY)
+        else:
+            sacred_gray = sacred38_result.copy()
+        
+        # Create skin color mask to better identify face/arms
+        hsv = cv2.cvtColor(original_image, cv2.COLOR_BGR2HSV)
+        
+        # Skin color range in HSV
+        lower_skin = np.array([0, 20, 70], dtype=np.uint8)
+        upper_skin = np.array([20, 255, 255], dtype=np.uint8)
+        skin_mask = cv2.inRange(hsv, lower_skin, upper_skin)
+        
+        # Also detect face using cascade
+        gray_original = cv2.cvtColor(original_image, cv2.COLOR_BGR2GRAY)
+        faces = self.face_cascade.detectMultiScale(gray_original, 1.05, 3, minSize=(20, 20))
+        
+        # Create exclusion mask
+        exclusion_mask = skin_mask.copy()
+        
+        # Add face region to exclusion
+        if len(faces) > 0:
+            for (x, y, w, h) in faces:
+                # Generous coverage for face and hair
+                extend_up = int(h * 1.0)
+                extend_down = int(h * 0.3)
+                extend_sides = int(w * 0.6)
+                
+                x1 = max(0, x - extend_sides)
+                y1 = max(0, y - extend_up)
+                x2 = min(width, x + w + extend_sides)
+                y2 = min(height, y + h + extend_down)
+                
+                cv2.rectangle(exclusion_mask, (x1, y1), (x2, y2), 255, cv2.FILLED)
+        
+        # Dilate exclusion mask
+        kernel = np.ones((15, 15), np.uint8)
+        exclusion_mask = cv2.dilate(exclusion_mask, kernel, iterations=2)
+        
+        # Apply exclusion to sacred-38 result
+        _, sacred_binary = cv2.threshold(sacred_gray, 127, 255, cv2.THRESH_BINARY)
+        garment_candidates = cv2.bitwise_and(sacred_binary, sacred_binary, mask=cv2.bitwise_not(exclusion_mask))
+        
+        # Find largest remaining blob (the garment)
+        contours, _ = cv2.findContours(garment_candidates, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        if not contours:
+            return None
+            
+        # Get largest contour
+        largest_contour = max(contours, key=cv2.contourArea)
+        
+        # Create final mask
+        garment_mask = np.zeros_like(sacred_gray)
+        cv2.drawContours(garment_mask, [largest_contour], -1, 255, cv2.FILLED)
+        
+        # Clean up
+        garment_mask = self._clean_mask(garment_mask)
         
         return garment_mask
