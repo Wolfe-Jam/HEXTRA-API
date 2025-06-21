@@ -1,146 +1,233 @@
 """
-HEXTRA API - The 38-Line Revolution
-FastAPI application serving 38 years of computer vision expertise
+HEXTRA-API: Garment Masking Service
+Combines sacred-38 processing with OpenCV garment isolation
 """
-
-import time
-from datetime import datetime
-from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 import os
-from dotenv import load_dotenv
+import io
+import base64
+from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from typing import Optional
+import cv2
+import numpy as np
 
-from app.api.v1.endpoints import router as api_v1_router
-from app.core.detection import get_algorithm_info
-from app.models.schemas import HealthResponse
+# Import our custom services
+from services.sacred38 import apply_sacred38
+from services.garment_masker import GarmentMasker
 
-# Load environment variables
-load_dotenv()
-
-# Create FastAPI app
+# --- FastAPI App Initialization ---
 app = FastAPI(
-    title="HEXTRA Detection API",
-    description="""
-    The 38-Line Revolution
-    
-    38 years of computer vision expertise (1986-2024) distilled into the most efficient 
-    garment detection API on the planet. 
-    
-    What took Cloudinary's entire platform to fail at, we accomplish with 38 lines of code.
-    Each line represents one year of hard-earned expertise.
-    
-    **Features:**
-    - Sub-second processing on any image
-    - Mathematical OTSU precision  
-    - Industry-leading accuracy
-    - Conquered Times Square Cutie (the impossible test case)
-    
-    **The Legend:** One line of code per year of experience.
-    """,
+    title="HEXTRA Garment Mask Generator",
+    description="Sacred-38 processing + intelligent garment isolation for HEXTRA Color Catalogs",
     version="1.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
-    contact={
-        "name": "HEXTRA API Support",
-        "url": "https://hextra.io",
-    },
-    license_info={
-        "name": "Proprietary - The 38-Line Revolution",
-        "url": "https://hextra.io/license",
-    }
 )
 
-# Store startup time for uptime calculation
-startup_time = time.time()
-
-# CORS middleware - allow HEXTRA frontend to call this API
+# Configure CORS for HEXTRA-COLOR-CATALOGS frontend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:3000",
-        "http://localhost:3005", 
-        "http://localhost:3007",
-        "http://localhost:3009",  # Added for current frontend port
-        "https://hextra.io",      # Main production domain
-        "https://www.hextra.io",   # WWW variant
-        "https://catalog.hextra.io",
-        "https://hextra-color-system-2.vercel.app"
+        "http://localhost:5173",  # Vite dev server
+        "http://localhost:3000",  # Alternative port
+        "https://hextra.io",      # Production
+        "https://catalog.hextra.io"
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Include API routes
-app.include_router(api_v1_router, prefix="/api/v1", tags=["Detection"])
+# Mount static files
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
+# Initialize garment masker
+masker = GarmentMasker()
 
-@app.get("/", response_model=dict)
+@app.get("/", response_class=HTMLResponse)
 async def root():
+    """Simple status page"""
+    return """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>HEXTRA-API - Garment Masking Service</title>
+        <style>
+            body { 
+                font-family: 'League Spartan', Arial, sans-serif; 
+                max-width: 800px; 
+                margin: 50px auto; 
+                padding: 20px;
+                background: #f5f5f5;
+            }
+            .status { 
+                background: #2ecc71; 
+                color: white; 
+                padding: 10px 20px; 
+                border-radius: 5px; 
+                display: inline-block;
+            }
+            h1 { color: #333; }
+            .endpoints { 
+                background: white; 
+                padding: 20px; 
+                border-radius: 8px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                margin-top: 20px;
+            }
+            code { 
+                background: #f0f0f0; 
+                padding: 2px 6px; 
+                border-radius: 3px;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>🎯 HEXTRA-API</h1>
+        <div class="status">✅ Service Running</div>
+        
+        <div class="endpoints">
+            <h2>Available Endpoints:</h2>
+            <ul>
+                <li><code>POST /process-garment/</code> - Full pipeline (sacred-38 + masking)</li>
+                <li><code>POST /sacred38/</code> - Sacred-38 processing only</li>
+                <li><code>POST /mask-garment/</code> - Garment masking only</li>
+                <li><code>GET /docs</code> - Interactive API documentation</li>
+            </ul>
+        </div>
+        
+        <div class="endpoints">
+            <h2>Pipeline Process:</h2>
+            <ol>
+                <li>Original Image → Sacred-38 Processing</li>
+                <li>Sacred-38 Result → Garment Detection</li>
+                <li>Final Output → Clean White Garment Mask</li>
+            </ol>
+        </div>
+    </body>
+    </html>
     """
-    Welcome to the HEXTRA API Empire
-    """
-    return {
-        "message": "HEXTRA Detection API - The 38-Line Revolution",
-        "version": "1.0.0",
-        "tagline": "38 years. 38 lines. Infinite possibilities.",
-        "documentation": "/docs",
-        "legend": "Each line of code represents one year of expertise",
-        "achievement": "Conquered what Cloudinary couldn't do",
-        "status": "Revolutionary"
-    }
 
-
-@app.get("/health", response_model=HealthResponse)
-async def health_check():
+@app.post("/process-garment/")
+async def process_garment_full_pipeline(
+    file: UploadFile = File(...),
+    return_intermediate: bool = False
+):
     """
-    Health check endpoint for monitoring
-    """
-    uptime = time.time() - startup_time
+    Full pipeline: Original image → Sacred-38 → Garment mask
     
-    return HealthResponse(
-        status="healthy",
-        version="1.0.0", 
-        uptime=round(uptime, 2),
-        algorithm_info=get_algorithm_info()
-    )
-
-
-@app.middleware("http")
-async def add_process_time_header(request: Request, call_next):
+    Args:
+        file: Image file to process
+        return_intermediate: If True, also returns sacred-38 result
+    
+    Returns:
+        JSON with base64 encoded images
     """
-    Add processing time to response headers
-    """
-    start_time = time.time()
-    response = await call_next(request)
-    process_time = time.time() - start_time
-    response.headers["X-Process-Time"] = str(round(process_time, 3))
-    return response
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="File must be an image")
+    
+    try:
+        # Read uploaded image
+        contents = await file.read()
+        nparr = np.frombuffer(contents, np.uint8)
+        original_img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        
+        if original_img is None:
+            raise HTTPException(status_code=400, detail="Could not decode image")
+        
+        # Step 1: Apply sacred-38 processing
+        sacred38_result = apply_sacred38(original_img)
+        
+        # Step 2: Extract garment mask from sacred-38 result
+        garment_mask = masker.extract_garment(sacred38_result)
+        
+        if garment_mask is None:
+            raise HTTPException(
+                status_code=500, 
+                detail="Could not detect garment. Try adjusting the image."
+            )
+        
+        # Encode results
+        response = {}
+        
+        # Always include final mask
+        _, mask_buffer = cv2.imencode(".png", garment_mask)
+        mask_base64 = base64.b64encode(mask_buffer).decode('utf-8')
+        response["garment_mask"] = f"data:image/png;base64,{mask_base64}"
+        
+        # Optionally include intermediate sacred-38 result
+        if return_intermediate:
+            _, sacred_buffer = cv2.imencode(".png", sacred38_result)
+            sacred_base64 = base64.b64encode(sacred_buffer).decode('utf-8')
+            response["sacred38_result"] = f"data:image/png;base64,{sacred_base64}"
+        
+        return JSONResponse(content=response)
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Processing error: {str(e)}")
 
+@app.post("/sacred38/")
+async def process_sacred38_only(file: UploadFile = File(...)):
+    """Apply only sacred-38 processing to an image"""
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="File must be an image")
+    
+    try:
+        contents = await file.read()
+        nparr = np.frombuffer(contents, np.uint8)
+        original_img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        
+        if original_img is None:
+            raise HTTPException(status_code=400, detail="Could not decode image")
+        
+        # Apply sacred-38
+        result = apply_sacred38(original_img)
+        
+        # Encode result
+        _, buffer = cv2.imencode(".png", result)
+        result_base64 = base64.b64encode(buffer).decode('utf-8')
+        
+        return JSONResponse(content={
+            "sacred38_result": f"data:image/png;base64,{result_base64}"
+        })
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Processing error: {str(e)}")
 
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    """
-    Global exception handler for graceful error responses
-    """
-    return JSONResponse(
-        status_code=500,
-        content={
-            "success": False,
-            "error": "Internal server error",
-            "message": "The 38-line algorithm encountered an unexpected situation",
-            "timestamp": datetime.now().isoformat(),
-            "path": str(request.url)
-        }
-    )
-
+@app.post("/mask-garment/")
+async def mask_garment_only(file: UploadFile = File(...)):
+    """Extract garment mask from an already processed image"""
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="File must be an image")
+    
+    try:
+        contents = await file.read()
+        nparr = np.frombuffer(contents, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        
+        if img is None:
+            raise HTTPException(status_code=400, detail="Could not decode image")
+        
+        # Extract garment mask
+        garment_mask = masker.extract_garment(img)
+        
+        if garment_mask is None:
+            raise HTTPException(
+                status_code=500, 
+                detail="Could not detect garment"
+            )
+        
+        # Encode result
+        _, buffer = cv2.imencode(".png", garment_mask)
+        mask_base64 = base64.b64encode(buffer).decode('utf-8')
+        
+        return JSONResponse(content={
+            "garment_mask": f"data:image/png;base64,{mask_base64}"
+        })
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Processing error: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(
-        "main:app", 
-        host="0.0.0.0", 
-        port=int(os.getenv("PORT", 8000)),
-        reload=os.getenv("DEBUG", "False").lower() == "true"
-    )
+    uvicorn.run(app, host="0.0.0.0", port=8000)

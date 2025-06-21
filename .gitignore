@@ -46,3 +46,12 @@ tmp/
 # Images (for testing)
 test_images/
 uploads/
+
+# IMPORTANT: Ignore ALL markdown files (strategy/documentation)
+*.md
+*.MD
+*.markdown
+*.MARKDOWN
+
+# But we might want to keep README.md visible, so explicitly include it
+!README.md
