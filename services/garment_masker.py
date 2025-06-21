@@ -512,3 +512,79 @@ class GarmentMasker:
         _, result = cv2.threshold(result, 127, 255, cv2.THRESH_BINARY)
         
         return result
+    
+    def extract_garment_exclude_face_after(self, sacred38_result: np.ndarray, original_image: np.ndarray) -> np.ndarray:
+        """
+        Extract garment by excluding face from sacred-38 result (not from original).
+        
+        Args:
+            sacred38_result: B/W mask from sacred-38
+            original_image: Original color image for face detection
+            
+        Returns:
+            Clean garment mask
+        """
+        # Convert sacred38 result to grayscale
+        if len(sacred38_result.shape) == 3:
+            sacred_gray = cv2.cvtColor(sacred38_result, cv2.COLOR_BGR2GRAY)
+        else:
+            sacred_gray = sacred38_result.copy()
+        
+        # Ensure binary
+        _, binary_mask = cv2.threshold(sacred_gray, 127, 255, cv2.THRESH_BINARY)
+        
+        # Detect faces in ORIGINAL image
+        gray_original = cv2.cvtColor(original_image, cv2.COLOR_BGR2GRAY)
+        faces = self.face_cascade.detectMultiScale(
+            gray_original,
+            scaleFactor=1.1,
+            minNeighbors=5,
+            minSize=(30, 30)
+        )
+        
+        # Create a copy to modify
+        result_mask = binary_mask.copy()
+        
+        # Black out face areas in the sacred-38 result
+        if len(faces) > 0:
+            for (x, y, w, h) in faces:
+                # Generous coverage for face and hair
+                extend_up = int(h * 1.0)
+                extend_down = int(h * 0.5)
+                extend_sides = int(w * 0.5)
+                
+                x1 = max(0, x - extend_sides)
+                y1 = max(0, y - extend_up)
+                x2 = min(result_mask.shape[1], x + w + extend_sides)
+                y2 = min(result_mask.shape[0], y + h + extend_down)
+                
+                # Set face region to black in the mask
+                result_mask[y1:y2, x1:x2] = 0
+        
+        # Now find the largest white blob
+        num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(result_mask, connectivity=8)
+        
+        if num_labels <= 1:
+            return result_mask
+        
+        # Find largest component (excluding background)
+        sizes = stats[1:, cv2.CC_STAT_AREA]
+        if len(sizes) > 0:
+            largest_idx = np.argmax(sizes) + 1
+            
+            # Create final mask with only largest component
+            final_mask = np.zeros_like(result_mask)
+            final_mask[labels == largest_idx] = 255
+            
+            # Clean up
+            kernel = np.ones((7, 7), np.uint8)
+            final_mask = cv2.morphologyEx(final_mask, cv2.MORPH_CLOSE, kernel, iterations=2)
+            final_mask = cv2.morphologyEx(final_mask, cv2.MORPH_OPEN, kernel, iterations=1)
+            
+            # Smooth edges
+            final_mask = cv2.GaussianBlur(final_mask, (5, 5), 0)
+            _, final_mask = cv2.threshold(final_mask, 127, 255, cv2.THRESH_BINARY)
+            
+            return final_mask
+        
+        return result_mask

@@ -7,47 +7,34 @@ import numpy as np
 
 def apply_sacred38(image: np.ndarray) -> np.ndarray:
     """
-    Apply sacred-38 with background removal approach.
+    Apply sacred-38 processing - simple and effective.
     
     Args:
         image: Input image as numpy array (BGR)
     
     Returns:
-        Processed image with background removed (black)
+        Processed image with white foreground, black background
     """
     # Convert to grayscale
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     
-    # Use GrabCut algorithm for background removal
-    # This is more sophisticated than simple thresholding
-    mask = np.zeros(gray.shape[:2], np.uint8)
-    bgdModel = np.zeros((1, 65), np.float64)
-    fgdModel = np.zeros((1, 65), np.float64)
+    # Apply bilateral filter to preserve edges while smoothing
+    bilateral = cv2.bilateralFilter(gray, 11, 50, 50)
     
-    # Define a rectangle around the subject (person)
-    # Assumes person is roughly centered
-    height, width = gray.shape
-    rect = (int(width * 0.1), int(height * 0.05), 
-            int(width * 0.8), int(height * 0.9))
-    
-    # Apply GrabCut
-    cv2.grabCut(image, mask, rect, bgdModel, fgdModel, 5, cv2.GC_INIT_WITH_RECT)
-    
-    # Modify the mask to get foreground
-    mask2 = np.where((mask == 2) | (mask == 0), 0, 255).astype('uint8')
-    
-    # Apply additional threshold to ensure solid areas
-    _, binary = cv2.threshold(mask2, 127, 255, cv2.THRESH_BINARY)
+    # Use OTSU's method for automatic thresholding
+    _, binary = cv2.threshold(bilateral, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     
     # Morphological operations to clean up
-    kernel = np.ones((5, 5), np.uint8)
-    cleaned = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel, iterations=2)
-    cleaned = cv2.morphologyEx(cleaned, cv2.MORPH_OPEN, kernel, iterations=1)
+    kernel = np.ones((7, 7), np.uint8)
+    
+    # Close gaps
+    closed = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel, iterations=2)
+    
+    # Remove noise
+    cleaned = cv2.morphologyEx(closed, cv2.MORPH_OPEN, kernel, iterations=1)
     
     # Convert to BGR
-    result = cv2.cvtColor(cleaned, cv2.COLOR_GRAY2BGR)
-    
-    return result
+    return cv2.cvtColor(cleaned, cv2.COLOR_GRAY2BGR)
 
 def apply_sacred38_edge_based(image: np.ndarray) -> np.ndarray:
     """
