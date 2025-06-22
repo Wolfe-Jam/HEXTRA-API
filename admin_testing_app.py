@@ -66,10 +66,12 @@ def test_parameters():
         
         # Step 1: Clean background masking (no face interference)
         image_array = np.array(image)
-        mask_result = quick_mask_processor.process(image_array)
+        mask_result_dict = quick_mask_processor.process(image_array)
+        mask_result = mask_result_dict["garment_mask"]
         
         # Step 2: Sacred-38 enhancement with custom intensity  
-        enhanced_result = sacred38_pro.process(mask_result)
+        enhanced_result_dict = sacred38_pro.process_sacred38_pro(image_array)
+        enhanced_result = enhanced_result_dict["final_result"]
         
         # Step 3: Apply additional refinements
         final_result = apply_admin_refinements(
