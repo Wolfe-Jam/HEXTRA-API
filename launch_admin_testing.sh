@@ -18,12 +18,15 @@ if [ ! -f "admin_testing_app.py" ]; then
     exit 1
 fi
 
-# Check Python dependencies
-echo "🔍 Checking dependencies..."
-python3 -c "import flask, cv2, numpy, PIL" 2>/dev/null
-if [ $? -ne 0 ]; then
-    echo "❌ Missing dependencies. Installing..."
+# Setup virtual environment if it doesn't exist
+if [ ! -d "admin_venv" ]; then
+    echo "🔧 Creating virtual environment..."
+    python3 -m venv admin_venv
+    source admin_venv/bin/activate
     pip install flask opencv-python numpy pillow
+else
+    echo "🔧 Activating virtual environment..."
+    source admin_venv/bin/activate
 fi
 
 # Create required directories
@@ -31,7 +34,7 @@ mkdir -p admin_test_results
 mkdir -p templates
 mkdir -p static
 
-echo "✅ Dependencies checked"
+echo "✅ Environment ready"
 echo ""
 
 # Launch the admin testing interface

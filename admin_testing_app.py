@@ -18,11 +18,18 @@ from datetime import datetime
 import json
 
 # Import our clean garment processing services
-from services.garment_masker import process_garment_clean
-from services.sacred38_pro import sacred38_enhancement
-from services.quick_mask import proven_background_masker
+from services.garment_masker import GarmentMasker
+from services.sacred38_pro import Sacred38ProProcessor  
+from services.quick_mask import QuickMaskProcessor
+from services.focus_detector import FocusDetector
 
 app = Flask(__name__)
+
+# Initialize processing components
+focus_detector = FocusDetector()
+garment_masker = GarmentMasker()
+sacred38_pro = Sacred38ProProcessor(garment_masker, focus_detector)
+quick_mask_processor = QuickMaskProcessor(focus_detector)
 
 # Admin test results storage
 ADMIN_RESULTS_DIR = "admin_test_results"
@@ -58,31 +65,27 @@ def test_parameters():
         image = Image.open(image_file.stream)
         
         # Step 1: Clean background masking (no face interference)
-        mask_result = proven_background_masker(
-            image, 
-            threshold=params['background_threshold']
-        )
+        image_array = np.array(image)
+        mask_result = quick_mask_processor.process(image_array)
         
-        # Step 2: Sacred-38 enhancement with custom intensity
-        enhanced_result = sacred38_enhancement(
-            mask_result, 
-            intensity=params['sacred38_intensity']
-        )
+        # Step 2: Sacred-38 enhancement with custom intensity  
+        enhanced_result = sacred38_pro.process(mask_result)
         
         # Step 3: Apply additional refinements
         final_result = apply_admin_refinements(
             enhanced_result, 
             params
         )
+        final_result_pil = array_to_pil(final_result)
         
         # Generate comparison images
         results = {
             'original': image_to_base64(image),
-            'step1_mask': image_to_base64(mask_result),
-            'step2_enhanced': image_to_base64(enhanced_result),
-            'final_result': image_to_base64(final_result),
+            'step1_mask': image_to_base64(array_to_pil(mask_result)),
+            'step2_enhanced': image_to_base64(array_to_pil(enhanced_result)),
+            'final_result': image_to_base64(final_result_pil),
             'parameters': params,
-            'quality_score': calculate_quality_score(final_result),
+            'quality_score': calculate_quality_score(final_result_pil),
             'test_timestamp': datetime.now().isoformat()
         }
         
@@ -94,12 +97,13 @@ def test_parameters():
     except Exception as e:
         return jsonify({"error": f"Processing failed: {str(e)}"}), 500
 
-def apply_admin_refinements(image, params):
+def apply_admin_refinements(image_array, params):
     """
     Apply additional refinements based on admin parameters
     Focus: Garment quality improvements only
+    Input: numpy array, Output: numpy array
     """
-    result = image.copy()
+    result = image_array.copy()
     
     # Edge refinement for cleaner garment boundaries
     if params['edge_refinement']:
@@ -115,51 +119,55 @@ def apply_admin_refinements(image, params):
     
     return result
 
-def refine_garment_edges(image):
-    """Improve garment edge definition"""
-    # Convert to OpenCV format
-    cv_image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
-    
+def refine_garment_edges(image_array):
+    """Improve garment edge definition - numpy array input/output"""
     # Apply gentle edge smoothing
     kernel = np.ones((3,3), np.uint8)
-    smoothed = cv2.morphologyEx(cv_image, cv2.MORPH_CLOSE, kernel)
-    
-    # Convert back to PIL
-    return Image.fromarray(cv2.cvtColor(smoothed, cv2.COLOR_BGR2RGB))
+    smoothed = cv2.morphologyEx(image_array, cv2.MORPH_CLOSE, kernel)
+    return smoothed
 
-def smooth_garment_mask(image, smoothing_factor):
-    """Reduce small artifacts in garment mask"""
-    # Convert to grayscale for mask analysis
-    gray = image.convert('L')
-    np_gray = np.array(gray)
+def smooth_garment_mask(image_array, smoothing_factor):
+    """Reduce small artifacts in garment mask - numpy array input/output"""
+    # Handle both grayscale and color images
+    if len(image_array.shape) == 3:
+        gray = cv2.cvtColor(image_array, cv2.COLOR_BGR2GRAY)
+    else:
+        gray = image_array
     
     # Apply Gaussian blur to reduce noise
     blur_amount = int(smoothing_factor * 10)
     if blur_amount > 0:
-        blurred = cv2.GaussianBlur(np_gray, (blur_amount*2+1, blur_amount*2+1), 0)
+        blurred = cv2.GaussianBlur(gray, (blur_amount*2+1, blur_amount*2+1), 0)
         
         # Threshold to maintain binary nature
         _, clean_mask = cv2.threshold(blurred, 127, 255, cv2.THRESH_BINARY)
         
-        # Convert back to RGB
-        result = Image.fromarray(clean_mask).convert('RGB')
+        # Convert back to original format
+        if len(image_array.shape) == 3:
+            result = cv2.cvtColor(clean_mask, cv2.COLOR_GRAY2BGR)
+        else:
+            result = clean_mask
         return result
     
-    return image
+    return image_array
 
-def enhance_white_preservation(image, preservation_factor):
-    """Enhance white garment area preservation"""
-    np_image = np.array(image)
-    
+def enhance_white_preservation(image_array, preservation_factor):
+    """Enhance white garment area preservation - numpy array input/output"""
     # Identify white/light areas (garment regions)
     white_threshold = int(255 * (1 - preservation_factor))
-    white_mask = np.all(np_image > white_threshold, axis=2)
     
-    # Enhance white areas
-    enhanced = np_image.copy()
-    enhanced[white_mask] = [255, 255, 255]  # Pure white for garment areas
+    if len(image_array.shape) == 3:
+        # Color image - check all channels
+        white_mask = np.all(image_array > white_threshold, axis=2)
+        enhanced = image_array.copy()
+        enhanced[white_mask] = [255, 255, 255]  # Pure white for garment areas
+    else:
+        # Grayscale image
+        white_mask = image_array > white_threshold
+        enhanced = image_array.copy()
+        enhanced[white_mask] = 255  # Pure white for garment areas
     
-    return Image.fromarray(enhanced)
+    return enhanced
 
 def calculate_quality_score(image):
     """
@@ -260,6 +268,18 @@ def optimal_parameters():
         "best_score": best_test['quality_score']['overall_score'],
         "test_count": len(history)
     })
+
+def array_to_pil(np_array):
+    """Convert numpy array to PIL image"""
+    if len(np_array.shape) == 3 and np_array.shape[2] == 3:
+        # BGR to RGB conversion for color images
+        return Image.fromarray(cv2.cvtColor(np_array, cv2.COLOR_BGR2RGB))
+    elif len(np_array.shape) == 2:
+        # Grayscale image
+        return Image.fromarray(np_array)
+    else:
+        # Already RGB format
+        return Image.fromarray(np_array)
 
 def image_to_base64(pil_image):
     """Convert PIL image to base64 string for web display"""
