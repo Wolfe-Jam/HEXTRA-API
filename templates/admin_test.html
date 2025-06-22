@@ -133,7 +133,7 @@
             color: #007bff;
             font-weight: 600;
             transition: all 0.3s ease;
-            min-height: 80px;
+            min-height: 140px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -385,7 +385,12 @@
                 </div>
                 
                 <div id="noResults" class="loading">
-                    <p>Upload an image and click "Test Parameters" to see results</p>
+                    <div id="imagePreview" style="display: none; text-align: center; margin: 20px 0;">
+                        <h4 style="color: #495057; margin-bottom: 15px;">📸 Uploaded Image Preview</h4>
+                        <img id="previewImage" style="max-width: 400px; max-height: 300px; border-radius: 15px; border: 3px solid #007bff; box-shadow: 0 8px 16px rgba(0,0,0,0.1);">
+                        <p style="color: #6c757d; margin-top: 10px;">Ready for parameter testing!</p>
+                    </div>
+                    <p id="uploadPrompt">Upload an image and click "Test Parameters" to see results</p>
                 </div>
             </div>
         </div>
@@ -428,18 +433,28 @@
                 reader.onload = function(e) {
                     // Update label to show preview
                     label.innerHTML = `
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <img src="${e.target.result}" style="width: 60px; height: 60px; object-fit: cover; border-radius: 8px; border: 2px solid #28a745;">
+                        <div style="display: flex; align-items: center; gap: 15px;">
+                            <img src="${e.target.result}" style="width: 120px; height: 120px; object-fit: cover; border-radius: 12px; border: 3px solid #28a745; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
                             <div>
-                                <div style="font-weight: bold; color: #155724;">✅ ${file.name}</div>
-                                <div style="font-size: 0.9em; color: #155724;">Ready for testing!</div>
+                                <div style="font-weight: bold; color: #155724; font-size: 1.1em;">✅ ${file.name}</div>
+                                <div style="font-size: 0.9em; color: #155724; margin-top: 5px;">Ready for testing!</div>
+                                <div style="font-size: 0.8em; color: #6c757d; margin-top: 3px;">Click Test Parameters to process</div>
                             </div>
                         </div>
                     `;
                     label.style.background = '#d4edda';
                     label.style.borderColor = '#28a745';
                     label.style.color = '#155724';
-                    label.style.padding = '10px';
+                    label.style.padding = '15px';
+                    
+                    // Show large preview in results panel
+                    const imagePreview = document.getElementById('imagePreview');
+                    const previewImage = document.getElementById('previewImage');
+                    const uploadPrompt = document.getElementById('uploadPrompt');
+                    
+                    previewImage.src = e.target.result;
+                    imagePreview.style.display = 'block';
+                    uploadPrompt.style.display = 'none';
                 };
                 reader.readAsDataURL(file);
             }
