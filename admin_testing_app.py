@@ -291,6 +291,6 @@ def image_to_base64(pil_image):
 if __name__ == '__main__':
     print("🎯 HEXTRA Admin Testing Interface")
     print("Focus: Garment Mask Parameter Refinement")
-    print("URL: http://localhost:8016/admin")
+    print("URL: http://localhost:8017/")
     print("Purpose: Test and optimize masking parameters")
-    app.run(host='0.0.0.0', port=8016, debug=True)
+    app.run(host='0.0.0.0', port=8017, debug=True)
