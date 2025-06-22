@@ -1,0 +1,98 @@
+d('return_debug', 'true');
+                
+                const response = await fetch(`http://localhost:8000/${endpoint}/`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const processingTime = ((Date.now() - startTime) / 1000).toFixed(1);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const result = await response.json();
+                displayResults(result, endpoint, processingTime);
+                
+            } catch (error) {
+                showMessage('error', `Processing failed: ${error.message}`);
+                console.error('Processing error:', error);
+            } finally {
+                // Re-enable buttons
+                sacred38Btn.disabled = false;
+                quickMaskBtn.disabled = false;
+            }
+        }
+        
+        function displayResults(result, endpoint, processingTime) {
+            const isProMode = endpoint === 'sacred38-pro';
+            const badge = isProMode ? '<span class="badge pro-badge">PRO</span>' : '<span class="badge quick-badge">QUICK</span>';
+            
+            let resultsHTML = `
+                <div class="processing-info">
+                    <h3>${isProMode ? '🔴 Sacred-38 Pro Results' : '🟢 Quick Mask Results'}${badge}</h3>
+                    <p><strong>Processing Time:</strong> ${processingTime}s</p>
+                    <p><strong>Method:</strong> ${isProMode ? 'Multi-pass professional analysis' : 'Single-pass quick detection'}</p>
+            `;
+            
+            if (result.confidence_score) {
+                resultsHTML += `<p><strong>Confidence:</strong> ${(result.confidence_score * 100).toFixed(1)}%</p>`;
+            }
+            
+            if (result.passes_completed) {
+                resultsHTML += `<p><strong>Analysis Passes:</strong> ${result.passes_completed}</p>`;
+            }
+            
+            resultsHTML += '</div>';
+            
+            // Display the mask result
+            if (result.garment_mask) {
+                resultsHTML += `
+                    <div style="text-align: center; margin-top: 20px;">
+                        <h4>🎯 Extracted Garment Mask</h4>
+                        <img src="${result.garment_mask}" class="result-image" alt="Garment mask result">
+                    </div>
+                `;
+            }
+            
+            // Display debug info if available
+            if (result.debug_info) {
+                resultsHTML += `
+                    <div style="margin-top: 20px;">
+                        <h4>🔧 Debug Information</h4>
+                        <pre style="background: #f1f5f9; padding: 15px; border-radius: 6px; font-size: 12px; overflow-x: auto;">
+${JSON.stringify(result.debug_info, null, 2)}
+                        </pre>
+                    </div>
+                `;
+            }
+            
+            resultsArea.innerHTML = resultsHTML;
+            resultsArea.style.display = 'block';
+            
+            showMessage('success', 
+                isProMode 
+                    ? `🔴 Sacred-38 Pro completed in ${processingTime}s with professional accuracy!`
+                    : `🟢 Quick Mask completed in ${processingTime}s - lightning fast!`
+            );
+        }
+        
+        function showMessage(type, message) {
+            const className = type === 'loading' ? 'loading' : type;
+            messageArea.innerHTML = `<div class="${className}">${message}</div>`;
+        }
+        
+        // Add some demo instructions
+        window.addEventListener('load', () => {
+            showMessage('', `
+                <div style="text-align: center; padding: 20px; background: #f0f4f7; border-radius: 8px;">
+                    <h3>🎯 Welcome to HEXTRA Two-Button System</h3>
+                    <p><strong>🔴 Sacred-38 Pro (Red):</strong> Maximum accuracy for complex garments</p>
+                    <p><strong>🟢 Quick Mask (Green):</strong> Lightning-fast results for simple images</p>
+                    <p>Upload an image to get started!</p>
+                </div>
+            `);
+        });
+    </script>
+</body>
+</html>

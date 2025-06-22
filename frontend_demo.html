@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HEXTRA Two-Button System - Test Interface</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            background: #f8f9fa;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 40px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            text-align: center;
+            color: #2d3748;
+            margin-bottom: 40px;
+        }
+        
+        .upload-area {
+            border: 2px dashed #cbd5e0;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            margin-bottom: 30px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .upload-area:hover {
+            border-color: #3182ce;
+            background: #f7fafc;
+        }
+        
+        .upload-area.dragover {
+            border-color: #3182ce;
+            background: #ebf8ff;
+        }
+        
+        .button-container {
+            display: flex;
+            gap: 20px;
+            margin: 30px 0;
+            justify-content: center;
+        }
+        
+        .process-button {
+            padding: 15px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 160px;
+            justify-content: center;
+        }
+        
+        .red-button {
+            background: #e53e3e;
+            color: white;
+        }
+        
+        .red-button:hover {
+            background: #c53030;
+            transform: translateY(-2px);
+        }
+        
+        .green-button {
+            background: #38a169;
+            color: white;
+        }
+        
+        .green-button:hover {
+            background: #2f855a;
+            transform: translateY(-2px);
+        }
+        
+        .button-description {
+            font-size: 12px;
+            opacity: 0.9;
+            margin-top: 5px;
+        }
+        
+        .results-area {
+            margin-top: 30px;
+            display: none;
+        }
+        
+        .result-image {
+            max-width: 100%;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 20px;
+            font-style: italic;
+            color: #666;
+        }
+        
+        .error {
+            background: #fed7d7;
+            color: #c53030;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        
+        .success {
+            background: #c6f6d5;
+            color: #2f855a;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        
+        .processing-info {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f0f4f7;
+            border-radius: 8px;
+            border-left: 4px solid #3182ce;
+        }
+        
+        .processing-info h3 {
+            margin: 0 0 10px 0;
+            color: #2d3748;
+        }
+        
+        .processing-info p {
+            margin: 5px 0;
+            font-size: 14px;
+            color: #4a5568;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+        
+        .pro-badge {
+            background: #e53e3e;
+            color: white;
+        }
+        
+        .quick-badge {
+            background: #38a169;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎯 HEXTRA Two-Button System</h1>
+        
+        <div class="upload-area" id="uploadArea">
+            <div>
+                <h3>📸 Drop your garment image here</h3>
+                <p>or click to select a file</p>
+                <input type="file" id="fileInput" accept="image/*" style="display: none;">
+            </div>
+        </div>
+        
+        <div class="button-container">
+            <div style="text-align: center;">
+                <button class="process-button red-button" id="sacred38Btn" disabled>
+                    <span>🔴 38</span>
+                </button>
+                <div class="button-description">Sacred-38 Pro<br>Maximum Accuracy</div>
+            </div>
+            
+            <div style="text-align: center;">
+                <button class="process-button green-button" id="quickMaskBtn" disabled>
+                    <span>🟢 1</span>
+                </button>
+                <div class="button-description">Quick Mask<br>Fast Results</div>
+            </div>
+        </div>
+        
+        <div id="messageArea"></div>
+        <div id="resultsArea" class="results-area"></div>
+    </div>
+
+    <script>
+        let selectedFile = null;
+        
+        // DOM elements
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const sacred38Btn = document.getElementById('sacred38Btn');
+        const quickMaskBtn = document.getElementById('quickMaskBtn');
+        const messageArea = document.getElementById('messageArea');
+        const resultsArea = document.getElementById('resultsArea');
+        
+        // Upload area event listeners
+        uploadArea.addEventListener('click', () => fileInput.click());
+        uploadArea.addEventListener('dragover', handleDragOver);
+        uploadArea.addEventListener('dragleave', handleDragLeave);
+        uploadArea.addEventListener('drop', handleDrop);
+        fileInput.addEventListener('change', handleFileSelect);
+        
+        // Button event listeners
+        sacred38Btn.addEventListener('click', () => processImage('sacred38-pro'));
+        quickMaskBtn.addEventListener('click', () => processImage('quick-mask'));
+        
+        function handleDragOver(e) {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        }
+        
+        function handleDragLeave(e) {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+        }
+        
+        function handleDrop(e) {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        }
+        
+        function handleFileSelect(e) {
+            const file = e.target.files[0];
+            if (file) {
+                handleFile(file);
+            }
+        }
+        
+        function handleFile(file) {
+            if (!file.type.startsWith('image/')) {
+                showMessage('error', 'Please select an image file.');
+                return;
+            }
+            
+            selectedFile = file;
+            
+            // Create image preview
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                uploadArea.innerHTML = `
+                    <div>
+                        <h3>✅ ${file.name}</h3>
+                        <img src="${e.target.result}" style="max-width: 200px; max-height: 150px; border-radius: 8px; margin: 10px 0;">
+                        <p>Ready to process - choose your method:</p>
+                    </div>
+                `;
+            };
+            reader.readAsDataURL(file);
+            
+            // Enable buttons
+            sacred38Btn.disabled = false;
+            quickMaskBtn.disabled = false;
+            
+            showMessage('success', 'Image loaded! Choose your processing method above.');
+        }
+        
+        async function processImage(endpoint) {
+            if (!selectedFile) {
+                showMessage('error', 'Please select an image first.');
+                return;
+            }
+            
+            // Disable buttons during processing
+            sacred38Btn.disabled = true;
+            quickMaskBtn.disabled = true;
+            
+            const isProMode = endpoint === 'sacred38-pro';
+            const startTime = Date.now();
+            
+            showMessage('loading', 
+                isProMode 
+                    ? '🔴 Sacred-38 Pro: Running professional multi-pass analysis...' 
+                    : '🟢 Quick Mask: Fast garment detection in progress...'
+            );
+            
+            try {
+                const formData = new FormData();
+                formData.append('file', selectedFile);
+                formData.append('return_debug', 'true');
+                
+                const response = await fetch(`http://localhost:8015/${endpoint}/`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const processingTime = ((Date.now() - startTime) / 1000).toFixed(1);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const result = await response.json();
+                displayResults(result, endpoint, processingTime);
+                
+            } catch (error) {
+                showMessage('error', `Processing failed: ${error.message}`);
+                console.error('Processing error:', error);
+            } finally {
+                // Re-enable buttons
+                sacred38Btn.disabled = false;
+                quickMaskBtn.disabled = false;
+            }
+        }
+        
+        function displayResults(result, endpoint, processingTime) {
+            const isProMode = endpoint === 'sacred38-pro';
+            const badge = isProMode ? '<span class="badge pro-badge">PRO</span>' : '<span class="badge quick-badge">QUICK</span>';
+            
+            let resultsHTML = `
+                <div class="processing-info">
+                    <h3>${isProMode ? '🔴 Sacred-38 Pro Results' : '🟢 Quick Mask Results'}${badge}</h3>
+                    <p><strong>Processing Time:</strong> ${processingTime}s</p>
+                    <p><strong>Method:</strong> ${isProMode ? 'Multi-pass professional analysis' : 'Single-pass quick detection'}</p>
+            `;
+            
+            if (result.confidence_score) {
+                resultsHTML += `<p><strong>Confidence:</strong> ${(result.confidence_score * 100).toFixed(1)}%</p>`;
+            }
+            
+            if (result.passes_completed) {
+                resultsHTML += `<p><strong>Analysis Passes:</strong> ${result.passes_completed}</p>`;
+            }
+            
+            resultsHTML += '</div>';
+            
+            // Display the mask result
+            if (result.garment_mask) {
+                resultsHTML += `
+                    <div style="text-align: center; margin-top: 20px;">
+                        <h4>🎯 Extracted Garment Mask</h4>
+                        <img src="${result.garment_mask}" class="result-image" alt="Garment mask result">
+                    </div>
+                `;
+            }
+            
+            // Display debug info if available
+            if (result.debug_info) {
+                resultsHTML += `
+                    <div style="margin-top: 20px;">
+                        <h4>🔧 Debug Information</h4>
+                        <pre style="background: #f1f5f9; padding: 15px; border-radius: 6px; font-size: 12px; overflow-x: auto;">
+${JSON.stringify(result.debug_info, null, 2)}
+                        </pre>
+                    </div>
+                `;
+            }
+            
+            resultsArea.innerHTML = resultsHTML;
+            resultsArea.style.display = 'block';
+            
+            showMessage('success', 
+                isProMode 
+                    ? `🔴 Sacred-38 Pro completed in ${processingTime}s with professional accuracy!`
+                    : `🟢 Quick Mask completed in ${processingTime}s - lightning fast!`
+            );
+        }
+        
+        function showMessage(type, message) {
+            const className = type === 'loading' ? 'loading' : type;
+            messageArea.innerHTML = `<div class="${className}">${message}</div>`;
+        }
+        
+        // Add some demo instructions
+        window.addEventListener('load', () => {
+            showMessage('', `
+                <div style="text-align: center; padding: 20px; background: #f0f4f7; border-radius: 8px;">
+                    <h3>🎯 Welcome to HEXTRA Two-Button System</h3>
+                    <p><strong>🔴 Sacred-38 Pro (Red):</strong> Maximum accuracy for complex garments</p>
+                    <p><strong>🟢 Quick Mask (Green):</strong> Lightning-fast results for simple images</p>
+                    <p>Upload an image to get started!</p>
+                </div>
+            `);
+        });
+    </script>
+</body>
+</html>

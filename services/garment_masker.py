@@ -444,21 +444,22 @@ class GarmentMasker:
         result = image.copy()
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         
-        # Detect faces
+        # Detect faces with enhanced sensitivity
         faces = self.face_cascade.detectMultiScale(
             gray,
-            scaleFactor=1.05,
-            minNeighbors=4,
-            minSize=(30, 30)
+            scaleFactor=1.03,   # More sensitive detection
+            minNeighbors=3,     # Slightly more lenient
+            minSize=(25, 25),   # Detect smaller faces
+            flags=cv2.CASCADE_SCALE_IMAGE
         )
         
         if len(faces) > 0:
             # Process each detected face
             for (x, y, w, h) in faces:
-                # Generous coverage for face, hair, and neck
-                extend_up = int(h * 1.0)     # Full height up for hair
-                extend_down = int(h * 0.8)   # Good neck coverage
-                extend_sides = int(w * 0.6)  # Hair on sides
+                # Extra generous coverage for hoodies (more hair/head area)
+                extend_up = int(h * 1.5)     # Extra height up for hair/hood
+                extend_down = int(h * 1.0)   # More neck coverage  
+                extend_sides = int(w * 0.8)  # More hair on sides
                 
                 x1 = max(0, x - extend_sides)
                 y1 = max(0, y - extend_up)
