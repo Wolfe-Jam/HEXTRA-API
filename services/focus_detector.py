@@ -136,9 +136,17 @@ class FocusDetector:
             Image with background (blurry) regions set to black
         """
         if len(image.shape) == 3:
-            # For color images, apply mask to all channels
+            # For color images, handle both RGB and RGBA
             result = image.copy()
-            result[focus_mask == 0] = [0, 0, 0]  # Set background to black
+            if image.shape[2] == 3:
+                # RGB image
+                result[focus_mask == 0] = [0, 0, 0]
+            elif image.shape[2] == 4:
+                # RGBA image  
+                result[focus_mask == 0] = [0, 0, 0, 255]  # Black with full alpha
+            else:
+                # Other channel counts - set to zero
+                result[focus_mask == 0] = 0
         else:
             # For grayscale images
             result = image.copy()

@@ -410,16 +410,31 @@
     <script>
         // Update parameter value displays
         document.querySelectorAll('input[type="range"]').forEach(slider => {
-            const valueDisplay = document.getElementById(slider.id.replace('Intensity', 'Value')
-                                                              .replace('Smoothing', 'Value')
-                                                              .replace('Threshold', 'Value')
-                                                              .replace('Preservation', 'Value'));
+            const sliderId = slider.id;
+            let valueDisplayId;
             
-            slider.addEventListener('input', () => {
-                if (valueDisplay) {
+            // Map slider IDs to their value display IDs
+            if (sliderId === 'sacred38Intensity') {
+                valueDisplayId = 'sacred38Value';
+            } else if (sliderId === 'maskSmoothing') {
+                valueDisplayId = 'smoothingValue';
+            } else if (sliderId === 'backgroundThreshold') {
+                valueDisplayId = 'thresholdValue';
+            } else if (sliderId === 'whitePreservation') {
+                valueDisplayId = 'preservationValue';
+            }
+            
+            const valueDisplay = document.getElementById(valueDisplayId);
+            
+            if (valueDisplay) {
+                // Set initial value
+                valueDisplay.textContent = slider.value;
+                
+                // Update on slider input
+                slider.addEventListener('input', () => {
                     valueDisplay.textContent = slider.value;
-                }
-            });
+                });
+            }
         });
         
         // Handle file upload preview
@@ -582,6 +597,11 @@
             `).join('');
             
             resultsSection.style.display = 'block';
+            
+            // Show debug info if available
+            if (results.debug_info) {
+                console.log('🔍 Debug Info:', results.debug_info);
+            }
             
             // Refresh history
             loadTestHistory();

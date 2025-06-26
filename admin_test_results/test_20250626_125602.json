@@ -1,0 +1,19 @@
+{
+  "parameters": {
+    "sacred38_intensity": 38,
+    "mask_smoothing": 0.1,
+    "edge_refinement": false,
+    "background_threshold": 0.5,
+    "white_preservation": 0.9
+  },
+  "quality_score": {
+    "overall_score": 59.7,
+    "detailed_metrics": {
+      "binary_clarity": 99,
+      "edge_definition": 0.0,
+      "artifact_level": 100,
+      "white_preservation": 0.0
+    }
+  },
+  "timestamp": "2025-06-26T12:56:02.700383"
+}

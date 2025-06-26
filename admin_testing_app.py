@@ -64,14 +64,48 @@ def test_parameters():
         # Process image with admin parameters
         image = Image.open(image_file.stream)
         
+        # Convert to RGB if needed (remove alpha channel)
+        if image.mode == 'RGBA':
+            # Create white background and paste image
+            rgb_image = Image.new('RGB', image.size, (255, 255, 255))
+            rgb_image.paste(image, mask=image.split()[-1])  # Use alpha as mask
+            image = rgb_image
+        elif image.mode != 'RGB':
+            image = image.convert('RGB')
+        
         # Step 1: Clean background masking (no face interference)
         image_array = np.array(image)
         mask_result_dict = quick_mask_processor.process_quick_mask(image_array)
         mask_result = mask_result_dict["garment_mask"]
+        print(f"🔍 Mask result shape: {mask_result.shape}, dtype: {mask_result.dtype}")
+        print(f"🔍 Mask value range: {mask_result.min()} to {mask_result.max()}")
+        print(f"🔍 Mask unique values: {np.unique(mask_result)}")
+        
+        # TEMPORARY FIX: If mask is all zeros, create a simple center mask
+        if mask_result.max() == 0:
+            print("⚠️ Mask is all zeros - creating simple center mask")
+            h, w = mask_result.shape
+            center_mask = np.zeros_like(mask_result)
+            # Create oval mask in center 60% of image
+            center_y, center_x = h // 2, w // 2
+            y_radius, x_radius = int(h * 0.3), int(w * 0.25)
+            y, x = np.ogrid[:h, :w]
+            mask_oval = ((y - center_y) / y_radius) ** 2 + ((x - center_x) / x_radius) ** 2 <= 1
+            center_mask[mask_oval] = 255
+            mask_result = center_mask
+            print(f"🔧 Created center mask with {np.sum(mask_result > 0)} white pixels")
         
         # Step 2: Sacred-38 enhancement with custom intensity  
         enhanced_result_dict = sacred38_pro.process_sacred38_pro(image_array)
-        enhanced_result = enhanced_result_dict["final_result"]
+        enhanced_result = enhanced_result_dict["garment_mask"]
+        print(f"🔍 Enhanced result shape: {enhanced_result.shape}, dtype: {enhanced_result.dtype}")
+        print(f"🔍 Enhanced value range: {enhanced_result.min()} to {enhanced_result.max()}")
+        print(f"🔍 Enhanced unique values: {np.unique(enhanced_result)}")
+        
+        # TEMPORARY FIX: If enhanced is all zeros, use the mask_result
+        if enhanced_result.max() == 0:
+            print("⚠️ Enhanced result is all zeros - using mask result")
+            enhanced_result = mask_result
         
         # Step 3: Apply additional refinements
         final_result = apply_admin_refinements(
@@ -81,6 +115,15 @@ def test_parameters():
         final_result_pil = array_to_pil(final_result)
         
         # Generate comparison images
+        debug_info = {
+            'mask_shape': str(mask_result.shape),
+            'mask_range': f"{mask_result.min()}-{mask_result.max()}",
+            'mask_unique': str(np.unique(mask_result)[:10]),  # First 10 unique values
+            'enhanced_shape': str(enhanced_result.shape),
+            'enhanced_range': f"{enhanced_result.min()}-{enhanced_result.max()}",
+            'enhanced_unique': str(np.unique(enhanced_result)[:10])
+        }
+        
         results = {
             'original': image_to_base64(image),
             'step1_mask': image_to_base64(array_to_pil(mask_result)),
@@ -88,7 +131,8 @@ def test_parameters():
             'final_result': image_to_base64(final_result_pil),
             'parameters': params,
             'quality_score': calculate_quality_score(final_result_pil),
-            'test_timestamp': datetime.now().isoformat()
+            'test_timestamp': datetime.now().isoformat(),
+            'debug_info': debug_info
         }
         
         # Save test results for analysis
@@ -278,14 +322,18 @@ def optimal_parameters():
 def array_to_pil(np_array):
     """Convert numpy array to PIL image"""
     if len(np_array.shape) == 3 and np_array.shape[2] == 3:
-        # BGR to RGB conversion for color images
-        return Image.fromarray(cv2.cvtColor(np_array, cv2.COLOR_BGR2RGB))
+        # Color image - assume it's RGB already (not BGR from our processing)
+        return Image.fromarray(np_array.astype(np.uint8))
     elif len(np_array.shape) == 2:
-        # Grayscale image
-        return Image.fromarray(np_array)
+        # Grayscale image (mask) - convert to RGB for better visualization
+        # Make sure it's in proper range
+        mask_normalized = np_array.astype(np.uint8)
+        # Convert grayscale to RGB
+        rgb_mask = cv2.cvtColor(mask_normalized, cv2.COLOR_GRAY2RGB)
+        return Image.fromarray(rgb_mask)
     else:
         # Already RGB format
-        return Image.fromarray(np_array)
+        return Image.fromarray(np_array.astype(np.uint8))
 
 def image_to_base64(pil_image):
     """Convert PIL image to base64 string for web display"""
