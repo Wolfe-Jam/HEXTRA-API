@@ -66,7 +66,7 @@ def test_parameters():
         
         # Step 1: Clean background masking (no face interference)
         image_array = np.array(image)
-        mask_result_dict = quick_mask_processor.process(image_array)
+        mask_result_dict = quick_mask_processor.process_quick_mask(image_array)
         mask_result = mask_result_dict["garment_mask"]
         
         # Step 2: Sacred-38 enhancement with custom intensity  
@@ -97,6 +97,10 @@ def test_parameters():
         return jsonify(results)
         
     except Exception as e:
+        print(f"❌ ERROR in test_parameters: {str(e)}")
+        print(f"❌ ERROR type: {type(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": f"Processing failed: {str(e)}"}), 500
 
 def apply_admin_refinements(image_array, params):
