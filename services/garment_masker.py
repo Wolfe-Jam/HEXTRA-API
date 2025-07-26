@@ -7,6 +7,8 @@ import numpy as np
 import os
 from .focus_detector import FocusDetector
 
+from ..utils.logger import logger
+
 class GarmentMasker:
     def __init__(self):
         """Initialize the garment masker with face detection capability"""
@@ -26,11 +28,11 @@ class GarmentMasker:
             if os.path.exists(path):
                 cascade = cv2.CascadeClassifier(path)
                 if not cascade.empty():
-                    print(f"Loaded face cascade from: {path}")
+                    logger.info(f"Loaded face cascade from: {path}")
                     return cascade
         
         # If not found, try to download
-        print("Haar cascade not found locally, downloading...")
+        logger.info("Haar cascade not found locally, downloading...")
         return self._download_haar_cascade()
     
     def _download_haar_cascade(self):
@@ -51,11 +53,11 @@ class GarmentMasker:
             with open(cascade_path, 'wb') as f:
                 f.write(response.content)
             
-            print(f"Downloaded Haar cascade to: {cascade_path}")
+            logger.info(f"Downloaded Haar cascade to: {cascade_path}")
             return cv2.CascadeClassifier(cascade_path)
             
         except Exception as e:
-            print(f"Failed to download Haar cascade: {e}")
+            logger.error(f"Failed to download Haar cascade: {e}")
             return None
     
     def extract_garment(self, processed_image: np.ndarray) -> np.ndarray:
@@ -101,7 +103,7 @@ class GarmentMasker:
         exclusion_mask = np.zeros_like(gray_image)
         
         if self.face_cascade is None:
-            print("Warning: Face cascade not loaded, skipping face detection")
+            logger.warning("Face cascade not loaded, skipping face detection")
             return exclusion_mask
         
         # Detect faces with more sensitive parameters
